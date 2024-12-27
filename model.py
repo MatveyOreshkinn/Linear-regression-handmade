@@ -73,7 +73,10 @@ class MyLineReg:
                     regular = self.elasticnet()
 
             grad = (2 / X.shape[0]) * np.dot((y_pred - y), X) + regular
-            self.weights -= self.learning_rate * grad
+            if callable(self.learning_rate):
+                self.weights -= grad * self.learning_rate(i + 1)
+            else:
+                self.weights -= grad * self.learning_rate
 
             metric_value = None
             if self.metric is not None:
@@ -131,7 +134,7 @@ class MyLineReg:
         """
         return self.l2_coef * 2 * self.weights
 
-    def elasticnet(self):
+    def elasticnet(self) -> np.ndarray:
         """
         Вычисляет комбинацию L1 и L2-регуляризации (Elastic Net) для текущих весов модели.
 
