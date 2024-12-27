@@ -1,12 +1,14 @@
 import numpy as np
 import pandas as pd
+import random
 from typing import Optional, Union, NoReturn
 
 
 class MyLineReg:
     def __init__(self, weights: Optional[np.ndarray] = None, n_iter: int = 100,
-                 learning_rate: float = 0.1, metric: Optional[str] = None,
-                 reg: Optional[str] = None, l1_coef: float = 0, l2_coef: float = 0) -> None:
+                 learning_rate: float = 0.1, metric: Optional[str] = None, reg: Optional[str] = None,
+                 l1_coef: float = 0, l2_coef: float = 0, sgd_sample: Optional[int | float] = None,
+                 random_state: int = 42) -> None:
         """
         Инициализация класса MyLineReg.
 
@@ -18,6 +20,8 @@ class MyLineReg:
             reg (Optional[str], optional): Метод регуляризации ('l1', 'l2' или None). По умолчанию None.
             l1_coef (float, optional): Коэффициент для L1-регуляризации. По умолчанию 0.
             l2_coef (float, optional): Коэффициент для L2-регуляризации. По умолчанию 0.
+            sgd_sample (Optional[int | float]): Кол-во образцов, которое будет использоваться на каждой итерации обучения.
+            random_state (int): Для воспроизводимости результата зафиксируем сид 
 
         """
         self.n_iter = n_iter
@@ -28,6 +32,8 @@ class MyLineReg:
         self.reg = reg
         self.l1_coef = l1_coef
         self.l2_coef = l2_coef
+        self.sgd_sample = sgd_sample
+        self.random_state = random_state
 
     def __str__(self) -> str:
         """
@@ -49,6 +55,7 @@ class MyLineReg:
             verbose (bool): Флаг для включения детального вывода. Defaults to False.
 
         """
+        random.seed(self.random_state)
         X.insert(0, 'x0', 1)  # оптимизация для нахождения градиента
         cnt_features = X.shape[1]
 
@@ -60,8 +67,21 @@ class MyLineReg:
             print(f'start | loss: {loss}')
 
         for i in range(self.n_iter):
-            y_pred = np.dot(X, self.weights)
-            loss = np.mean((y_pred - y) ** 2)
+            if self.sgd_sample is None:
+                y_pred = np.dot(X, self.weights)
+                y_select = y
+                X_select = X
+            else:
+                if isinstance(self.sgd_sample, float):
+                    self.sgd_sample = round(X.shape[0] * self.sgd_sample)
+
+                sample_rows_idx = random.sample(
+                    range(X.shape[0]), self.sgd_sample)
+                y_pred = np.dot(X, self.weights)[sample_rows_idx]
+                y_select = y.iloc[sample_rows_idx]
+                X_select = X.iloc[sample_rows_idx]
+
+            loss = np.mean((np.dot(X, self.weights) - y) ** 2)
 
             regular = 0
             if self.reg is not None:
@@ -72,7 +92,8 @@ class MyLineReg:
                 else:
                     regular = self.elasticnet()
 
-            grad = (2 / X.shape[0]) * np.dot((y_pred - y), X) + regular
+            grad = (2 / X_select.shape[0]) * \
+                np.dot((y_pred - y_select), X_select) + regular
             if callable(self.learning_rate):
                 self.weights -= grad * self.learning_rate(i + 1)
             else:
