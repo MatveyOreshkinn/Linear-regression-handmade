@@ -5,7 +5,8 @@ from typing import Optional, Union, NoReturn
 
 class MyLineReg:
     def __init__(self, weights: Optional[np.ndarray] = None, n_iter: int = 100,
-                 learning_rate: float = 0.1, metric: Optional[str] = None) -> None:
+                 learning_rate: float = 0.1, metric: Optional[str] = None,
+                 reg: Optional[str] = None, l1_coef: float = 0, l2_coef: float = 0) -> None:
         """
         Инициализация класса MyLineReg.
 
@@ -14,6 +15,9 @@ class MyLineReg:
             n_iter (int, optional): Количество итераций градиентного спуска. По умолчанию 100.
             learning_rate (float, optional): Скорость обучения. По умолчанию 0.1.
             metric (Optional[str], optional): Метрика для оценки (например, 'mae', 'mse'). По умолчанию None.
+            reg (Optional[str], optional): Метод регуляризации ('l1', 'l2' или None). По умолчанию None.
+            l1_coef (float, optional): Коэффициент для L1-регуляризации. По умолчанию 0.
+            l2_coef (float, optional): Коэффициент для L2-регуляризации. По умолчанию 0.
 
         """
         self.n_iter = n_iter
@@ -21,6 +25,9 @@ class MyLineReg:
         self.weights = weights
         self.metric = metric
         self.best_score = None
+        self.reg = reg
+        self.l1_coef = l1_coef
+        self.l2_coef = l2_coef
 
     def __str__(self) -> str:
         """
@@ -56,7 +63,16 @@ class MyLineReg:
             y_pred = np.dot(X, self.weights)
             loss = np.mean((y_pred - y) ** 2)
 
-            grad = (2 / X.shape[0]) * np.dot((y_pred - y), X)
+            regular = 0
+            if self.reg is not None:
+                if self.reg == 'l1':
+                    regular = self.l1()
+                elif self.reg == 'l2':
+                    regular = self.l2()
+                else:
+                    regular = self.elasticnet()
+
+            grad = (2 / X.shape[0]) * np.dot((y_pred - y), X) + regular
             self.weights -= self.learning_rate * grad
 
             metric_value = None
@@ -94,6 +110,36 @@ class MyLineReg:
         """
         X.insert(0, 'x0', 1)
         return np.dot(X, self.weights)
+
+    def l1(self) -> np.ndarray:
+        """
+        Вычисляет L1-регуляризацию для текущих весов модели.
+
+        Returns:
+            np.ndarray: Значения L1-регуляризации, умноженные на коэффициент l1_coef.
+
+        """
+        return self.l1_coef * np.sign(self.weights)
+
+    def l2(self) -> np.ndarray:
+        """
+        Вычисляет L2-регуляризацию для текущих весов модели.
+
+        Returns:
+            np.ndarray: Значения L2-регуляризации, умноженные на коэффициент l2_coef.
+
+        """
+        return self.l2_coef * 2 * self.weights
+
+    def elasticnet(self):
+        """
+        Вычисляет комбинацию L1 и L2-регуляризации (Elastic Net) для текущих весов модели.
+
+        Returns:
+            np.ndarray: Сумма L1 и L2-регуляризаций.
+
+        """
+        return self.l1() + self.l2()
 
     def mae(self, X: pd.DataFrame, y: pd.Series) -> float:
         """
